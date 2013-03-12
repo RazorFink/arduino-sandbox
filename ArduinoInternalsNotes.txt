@@ -1,0 +1,4 @@
+// Arduino Notes
+DDR = Data Direction Register
+Each DDR PORT register is a byte worth of pin assignment bits.
+DDRB = PORT B = Arduino D8 (0) thru D
