@@ -4,7 +4,8 @@
 // Reset button resets peak value
 
 // 7-segment led driver library
-#include "LedControl.h"
+#include <LedControl.h>
+#include <avr/interrupt.h>
 
 // arduino pin assignments
 #define PIN_LED_DIN 12
@@ -15,6 +16,7 @@
 #define MAX_DIGIT_CURRENT 7
 #define MAX_DIGIT_PEAK 3
 #define OVERSAMPLE 64
+#define OS_MULTIPLIER 2
 
 // LED driver object
 LedControl lc = LedControl(PIN_LED_DIN, PIN_LED_CLK, PIN_LED_LOAD, 1);
@@ -28,40 +30,31 @@ void setup() {
   lc.setIntensity(0, 8);
   lc.clearDisplay(0); 
   adcPeak, adcCurrent = 0;
-  // Peak Reset interrupt
-//  attachInterrupt(PIN_PEAK_RESET, peakReset, LOW);
+  //sei();
+  //EIMSK |= (1 << INT0);
+  //EICRA |= (1 << ISC01);
   pinMode(PIN_SENSOR_ADC, INPUT);
-
- // digitalWrite(2, HIGH); // button press pulls PEAK_RESET LOW
-                                  // release (HIGH) triggers interrupt
- // Serial.begin(9600);
 }
 
 void updateDisplayPeak() {
-  updateFourDigits(MAX_DIGIT_PEAK, adcPeak); 
- // Serial.print("Peak: ");
- // Serial.println(adcPeak);
+  updateFourDigits(MAX_DIGIT_PEAK, getPeakAsKpa()); 
 }
 
 void updateDisplayCurrent() {
-  updateFourDigits(MAX_DIGIT_CURRENT, adcCurrent);
-//  Serial.print("Current: ");
- // Serial.println(adcCurrent);
+  updateFourDigits(MAX_DIGIT_CURRENT, getCurrentAsKpa());
 }
 
-void updateFourDigits
-  (byte maxDigitIndex, int value) {
-  // display 4 digits on 8 digit display
-  // single decimal point (value / 10)
-//  Serial.print("Digital: ");
-//  Serial.print(value / 1000 % 10);  
-//  Serial.print(value / 100 % 10);
- // Serial.print(value / 10 % 10);
- // Serial.print(value % 10);
- // Serial.println();
-  
+int getCurrentAsKpa() {
+  return (kpaFromAdc(adcCurrent));
+}
+
+int getPeakAsKpa() {
+  return (kpaFromAdc(adcCurrent));
+}
+
+void updateFourDigits (byte maxDigitIndex, int value) {
   lc.setDigit(0, (maxDigitIndex - 3), (value % 10), false); 
-  lc.setDigit(0, (maxDigitIndex - 2), (value / 10 % 10), true);
+  lc.setDigit(0, (maxDigitIndex - 2), (value / 10 % 10), false);
   lc.setDigit(0, (maxDigitIndex - 1), (value / 100 % 10), false);
   lc.setDigit(0, maxDigitIndex, (value / 1000 % 10), false);
 }
@@ -70,14 +63,33 @@ void peakReset() {
   adcPeak = adcCurrent;  
   updateDisplayPeak();
 }
+/*
+ISR(EXT_INT0_vect) {
+    
+}
+*/
+int kpaFromAdc(int adc) {
+  return kpaFromVolts(voltsFromAdc(adc));
+}
+
+int kpaFromVolts(float volts) {
+  return (int)((volts/5+0.04)/0.004);
+}
+
+float voltsFromAdc(int adc) {
+  return (float)(adc * 5) / 1024;
+}
 
 int readAdc() {
-  unsigned int sampleSum = 0;
-  for (int i = 0; i < OVERSAMPLE; i++) {
-    sampleSum += analogRead(PIN_SENSOR_ADC); 
+  unsigned int sampleSum2 = 0;
+  for (int ii = 0; ii < OS_MULTIPLIER; ii++) {
+    unsigned int sampleSum = 0;
+    for (int i = 0; i < OVERSAMPLE; i++) {
+      sampleSum += analogRead(PIN_SENSOR_ADC); 
+    }
+    sampleSum2 += sampleSum / OVERSAMPLE;
   }
-    
-  return sampleSum / OVERSAMPLE;
+  return sampleSum2 / OS_MULTIPLIER;
 }
 
 void loop() {
